@@ -4,3 +4,5 @@ out/
 .env
 arc-hash.cjs
 
+
+cf-deploy.cjs
