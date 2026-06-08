@@ -33,15 +33,43 @@ function fmt(addr: string) {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
 
-async function addArcNetwork() {
+function getProvider() {
   const win = window as any;
-  const provider = win.ethereum;
-  if (!provider) return;
+  let p = win.ethereum;
+  if (p?.providers?.length) {
+    p = p.providers.find((x: any) => x.isMetaMask) || p.providers[0];
+  }
+  return p;
+}
+
+async function addArcNetwork() {
+  const provider = getProvider();
+  if (!provider?.request) {
+    alert("No EVM wallet detected. Please install MetaMask (or another wallet) and reload.");
+    return;
+  }
   try {
     await provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: ARC_HEX }] });
+    return;
   } catch (e: any) {
-    if (e?.code === 4902 || e?.code === -32603 || e?.message?.includes("nrecognized")) {
-      await provider.request({ method: "wallet_addEthereumChain", params: [ARC_PARAMS] });
+    const unknown =
+      e?.code === 4902 ||
+      e?.code === -32603 ||
+      /unrecognized|not been added|unknown chain|nrecognized/i.test(e?.message || "");
+    if (!unknown) {
+      if (e?.code !== 4001) console.error("switch failed", e);
+      return;
+    }
+  }
+  try {
+    await provider.request({ method: "wallet_addEthereumChain", params: [ARC_PARAMS] });
+    try {
+      await provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: ARC_HEX }] });
+    } catch {}
+  } catch (e: any) {
+    if (e?.code !== 4001) {
+      console.error("add failed", e);
+      alert("Could not add Arc Testnet. Add it manually:\nRPC https://rpc.testnet.arc.network\nChain ID 5042002\nSymbol USDC");
     }
   }
 }
@@ -71,9 +99,9 @@ export function ConnectButton() {
         {wrongNetwork && (
           <button
             onClick={addArcNetwork}
-            className="text-xs bg-red-500 hover:bg-red-400 text-white px-3 py-1.5 rounded-xl font-semibold"
+            className="flex items-center gap-1.5 text-xs bg-red-500 hover:bg-red-400 text-white px-3 py-1.5 rounded-xl font-semibold"
           >
-            ⚠️ Switch Network
+            ⚠️ Wrong network
           </button>
         )}
         <div className="relative">
